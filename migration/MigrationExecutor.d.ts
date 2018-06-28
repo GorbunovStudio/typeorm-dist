@@ -7,7 +7,12 @@ import { QueryRunner } from "../query-runner/QueryRunner";
 export declare class MigrationExecutor {
     protected connection: Connection;
     protected queryRunner: QueryRunner | undefined;
-    private migrationsTableName;
+    /**
+     * Indicates if migrations must be executed in a transaction.
+     */
+    transaction: boolean;
+    private readonly migrationsTable;
+    private readonly migrationsTableName;
     constructor(connection: Connection, queryRunner?: QueryRunner | undefined);
     /**
      * Executes all pending migrations. Pending migrations are migrations that are not yet executed,
@@ -33,7 +38,11 @@ export declare class MigrationExecutor {
     /**
      * Finds the latest migration (sorts by timestamp) in the given array of migrations.
      */
-    protected getLatestMigration(migrations: Migration[]): Migration | undefined;
+    protected getLatestTimestampMigration(migrations: Migration[]): Migration | undefined;
+    /**
+     * Finds the latest migration (sorts by id) in the given array of migrations.
+     */
+    protected getLatestExecutedMigration(migrations: Migration[]): Migration | undefined;
     /**
      * Inserts new executed migration's data into migrations table.
      */

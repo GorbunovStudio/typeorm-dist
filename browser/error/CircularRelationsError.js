@@ -14,8 +14,10 @@ var __extends = (this && this.__extends) || (function () {
 var CircularRelationsError = /** @class */ (function (_super) {
     __extends(CircularRelationsError, _super);
     function CircularRelationsError(path) {
-        var _this = _super.call(this, "Circular relations detected: " + path + ". To resolve this issue you need to set nullable: false somewhere in this dependency structure.") || this;
+        var _this = _super.call(this) || this;
         _this.name = "CircularRelationsError";
+        Object.setPrototypeOf(_this, CircularRelationsError.prototype);
+        _this.message = "Circular relations detected: " + path + ". To resolve this issue you need to set nullable: false somewhere in this dependency structure.";
         return _this;
     }
     return CircularRelationsError;

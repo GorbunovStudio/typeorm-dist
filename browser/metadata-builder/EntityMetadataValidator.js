@@ -5,6 +5,8 @@ import { DataTypeNotSupportedError } from "../error/DataTypeNotSupportedError";
 import { MongoDriver } from "../driver/mongodb/MongoDriver";
 import { SqlServerDriver } from "../driver/sqlserver/SqlServerDriver";
 import { MysqlDriver } from "../driver/mysql/MysqlDriver";
+import { NoConnectionOptionError } from "../error/NoConnectionOptionError";
+import { InitializedRelationError } from "../error/InitializedRelationError";
 /// todo: add check if there are multiple tables with the same name
 /// todo: add checks when generated column / table names are too long for the specific driver
 // todo: type in function validation, inverse side function validation
@@ -17,6 +19,9 @@ import { MysqlDriver } from "../driver/mysql/MysqlDriver";
 // todo: MetadataArgsStorage: check on build for duplicate names, since naming checking was removed from MetadataStorage
 // todo: MetadataArgsStorage: duplicate name checking for: table, relation, column, index, naming strategy, join tables/columns?
 // todo: MetadataArgsStorage: check for duplicate targets too since this check has been removed too
+// todo: check if relation decorator contains primary: true and nullable: true
+// todo: check column length, precision. scale
+// todo: MySQL index can be unique or spatial or fulltext
 /**
  * Validates built entity metadatas.
  */
@@ -40,13 +45,13 @@ var EntityMetadataValidator = /** @class */ (function () {
      */
     EntityMetadataValidator.prototype.validate = function (entityMetadata, allEntityMetadatas, driver) {
         // check if table metadata has an id
-        if (!entityMetadata.isClassTableChild && !entityMetadata.primaryColumns.length && !entityMetadata.isJunction)
+        if (!entityMetadata.primaryColumns.length && !entityMetadata.isJunction)
             throw new MissingPrimaryColumnError(entityMetadata);
         // validate if table is using inheritance it has a discriminator
         // also validate if discriminator values are not empty and not repeated
-        if (entityMetadata.inheritanceType === "single-table") {
+        if (entityMetadata.inheritancePattern === "STI") {
             if (!entityMetadata.discriminatorColumn)
-                throw new Error("Entity " + entityMetadata.name + " using single-table inheritance, it should also have a discriminator column. Did you forget to put @DiscriminatorColumn decorator?");
+                throw new Error("Entity " + entityMetadata.name + " using single-table inheritance, it should also have a discriminator column. Did you forget to put discriminator column options?");
             if (["", undefined, null].indexOf(entityMetadata.discriminatorValue) !== -1)
                 throw new Error("Entity " + entityMetadata.name + " has empty discriminator value. Discriminator value should not be empty.");
             var sameDiscriminatorValueEntityMetadata = allEntityMetadatas.find(function (metadata) {
@@ -68,21 +73,37 @@ var EntityMetadataValidator = /** @class */ (function () {
                     throw new Error("Column " + column.propertyName + " of Entity " + entityMetadata.name + " does not support length property.");
             });
         }
-        /* if (driver instanceof MysqlDriver) {
-             const generatedColumns = entityMetadata.columns.filter(column => column.isGenerated && column.generationStrategy !== "uuid");
-             if (generatedColumns.length > 1)
-                 throw new Error(`Error in ${entityMetadata.name} entity. There can be only one auto-increment column in MySql table.`);
-         }*/
+        if (driver instanceof MysqlDriver) {
+            var generatedColumns = entityMetadata.columns.filter(function (column) { return column.isGenerated && column.generationStrategy !== "uuid"; });
+            if (generatedColumns.length > 1)
+                throw new Error("Error in " + entityMetadata.name + " entity. There can be only one auto-increment column in MySql table.");
+        }
+        // for mysql we are able to not define a default selected database, instead all entities can have their database
+        // defined in their decorators. To make everything work either all entities must have database define and we
+        // can live without database set in the connection options, either database in the connection options must be set
         if (driver instanceof MysqlDriver) {
             var metadatasWithDatabase = allEntityMetadatas.filter(function (metadata) { return metadata.database; });
             if (metadatasWithDatabase.length === 0 && !driver.database)
-                throw new Error("Database not specified");
+                throw new NoConnectionOptionError("database");
         }
         if (driver instanceof SqlServerDriver) {
             var charsetColumns = entityMetadata.columns.filter(function (column) { return column.charset; });
             if (charsetColumns.length > 1)
                 throw new Error("Character set specifying is not supported in Sql Server");
         }
+        // check if relations are all without initialized properties
+        var entityInstance = entityMetadata.create();
+        entityMetadata.relations.forEach(function (relation) {
+            if (relation.isManyToMany || relation.isOneToMany) {
+                // we skip relations for which persistence is disabled since initialization in them cannot harm somehow
+                if (relation.persistenceEnabled === false)
+                    return;
+                // get entity relation value and check if its an array
+                var relationInitializedValue = relation.getEntityValue(entityInstance);
+                if (relationInitializedValue instanceof Array)
+                    throw new InitializedRelationError(relation);
+            }
+        });
         // validate relations
         entityMetadata.relations.forEach(function (relation) {
             // check join tables:

@@ -1,5 +1,7 @@
 import { ColumnMetadata } from "../metadata/ColumnMetadata";
+import { UniqueMetadata } from "../metadata/UniqueMetadata";
 import { ForeignKeyMetadata } from "../metadata/ForeignKeyMetadata";
+import { OracleDriver } from "../driver/oracle/OracleDriver";
 /**
  * Builds join column for the many-to-one and one-to-one owner relations.
  *
@@ -46,9 +48,9 @@ var RelationJoinColumnBuilder = /** @class */ (function () {
     RelationJoinColumnBuilder.prototype.build = function (joinColumns, relation) {
         var referencedColumns = this.collectReferencedColumns(joinColumns, relation);
         if (!referencedColumns.length)
-            return undefined; // this case is possible only for one-to-one non owning side
+            return { foreignKey: undefined, uniqueConstraint: undefined }; // this case is possible only for one-to-one non owning side
         var columns = this.collectColumns(joinColumns, relation, referencedColumns);
-        return new ForeignKeyMetadata({
+        var foreignKey = new ForeignKeyMetadata({
             entityMetadata: relation.entityMetadata,
             referencedEntityMetadata: relation.inverseEntityMetadata,
             namingStrategy: this.connection.namingStrategy,
@@ -56,6 +58,22 @@ var RelationJoinColumnBuilder = /** @class */ (function () {
             referencedColumns: referencedColumns,
             onDelete: relation.onDelete,
         });
+        // Oracle does not allow both primary and unique constraints on the same column
+        if (this.connection.driver instanceof OracleDriver && columns.every(function (column) { return column.isPrimary; }))
+            return { foreignKey: foreignKey, uniqueConstraint: undefined };
+        if (referencedColumns.length > 0 && relation.isOneToOne) {
+            var uniqueConstraint = new UniqueMetadata({
+                entityMetadata: relation.entityMetadata,
+                columns: foreignKey.columns,
+                args: {
+                    name: this.connection.namingStrategy.relationConstraintName(relation.entityMetadata.tablePath, foreignKey.columns.map(function (c) { return c.databaseName; })),
+                    target: relation.entityMetadata.target,
+                }
+            });
+            uniqueConstraint.build(this.connection.namingStrategy);
+            return { foreignKey: foreignKey, uniqueConstraint: uniqueConstraint };
+        }
+        return { foreignKey: foreignKey, uniqueConstraint: undefined };
     };
     // -------------------------------------------------------------------------
     // Protected Methods
@@ -67,10 +85,10 @@ var RelationJoinColumnBuilder = /** @class */ (function () {
         var hasAnyReferencedColumnName = joinColumns.find(function (joinColumnArgs) { return !!joinColumnArgs.referencedColumnName; });
         var manyToOneWithoutJoinColumn = joinColumns.length === 0 && relation.isManyToOne;
         var hasJoinColumnWithoutAnyReferencedColumnName = joinColumns.length > 0 && !hasAnyReferencedColumnName;
-        if (manyToOneWithoutJoinColumn || hasJoinColumnWithoutAnyReferencedColumnName) {
+        if (manyToOneWithoutJoinColumn || hasJoinColumnWithoutAnyReferencedColumnName) { // covers case3 and case1
             return relation.inverseEntityMetadata.primaryColumns;
         }
-        else {
+        else { // cases with referenced columns defined
             return joinColumns.map(function (joinColumn) {
                 var referencedColumn = relation.inverseEntityMetadata.ownColumns.find(function (column) { return column.propertyName === joinColumn.referencedColumnName; }); // todo: can we also search in relations?
                 if (!referencedColumn)
@@ -104,13 +122,16 @@ var RelationJoinColumnBuilder = /** @class */ (function () {
                             name: joinColumnName,
                             type: referencedColumn.type,
                             length: referencedColumn.length,
+                            width: referencedColumn.width,
                             charset: referencedColumn.charset,
                             collation: referencedColumn.collation,
                             precision: referencedColumn.precision,
                             scale: referencedColumn.scale,
+                            zerofill: referencedColumn.zerofill,
+                            unsigned: referencedColumn.unsigned,
                             comment: referencedColumn.comment,
                             primary: relation.isPrimary,
-                            nullable: relation.isNullable,
+                            nullable: relation.isNullable
                         }
                     }
                 });

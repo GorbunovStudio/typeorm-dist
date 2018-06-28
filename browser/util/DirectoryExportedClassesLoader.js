@@ -1,11 +1,12 @@
 import { PlatformTools } from "../platform/PlatformTools";
+import { EntitySchema } from "../index";
 /**
  * Loads all exported classes from the given directory.
  */
 export function importClassesFromDirectories(directories, formats) {
     if (formats === void 0) { formats = [".js", ".ts"]; }
     function loadFileClasses(exported, allLoaded) {
-        if (typeof exported === "function") {
+        if (typeof exported === "function" || exported instanceof EntitySchema) {
             allLoaded.push(exported);
         }
         else if (Array.isArray(exported)) {

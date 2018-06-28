@@ -1,22 +1,28 @@
-import { getMetadataArgsStorage } from "../index";
+import { getMetadataArgsStorage } from "../";
 /**
- * Composite index must be set on entity classes and must specify entity's fields to be indexed.
+ * Creates a database index.
+ * Can be used on entity property or on entity.
+ * Can create indices with composite columns when used on entity.
  */
 export function Index(nameOrFieldsOrOptions, maybeFieldsOrOptions, maybeOptions) {
+    // normalize parameters
     var name = typeof nameOrFieldsOrOptions === "string" ? nameOrFieldsOrOptions : undefined;
     var fields = typeof nameOrFieldsOrOptions === "string" ? maybeFieldsOrOptions : nameOrFieldsOrOptions;
     var options = (typeof nameOrFieldsOrOptions === "object" && !Array.isArray(nameOrFieldsOrOptions)) ? nameOrFieldsOrOptions : maybeOptions;
     if (!options)
         options = (typeof maybeFieldsOrOptions === "object" && !Array.isArray(maybeFieldsOrOptions)) ? maybeFieldsOrOptions : maybeOptions;
     return function (clsOrObject, propertyName) {
-        var args = {
+        getMetadataArgsStorage().indices.push({
             target: propertyName ? clsOrObject.constructor : clsOrObject,
             name: name,
             columns: propertyName ? [propertyName] : fields,
+            synchronize: options && options.synchronize === false ? false : true,
+            where: options ? options.where : undefined,
             unique: options && options.unique ? true : false,
+            spatial: options && options.spatial ? true : false,
+            fulltext: options && options.fulltext ? true : false,
             sparse: options && options.sparse ? true : false
-        };
-        getMetadataArgsStorage().indices.push(args);
+        });
     };
 }
 

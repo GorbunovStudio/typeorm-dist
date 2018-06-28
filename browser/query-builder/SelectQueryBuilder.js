@@ -56,7 +56,6 @@ import { RelationIdLoader } from "./relation-id/RelationIdLoader";
 import { RelationIdMetadataToAttributeTransformer } from "./relation-id/RelationIdMetadataToAttributeTransformer";
 import { RelationCountLoader } from "./relation-count/RelationCountLoader";
 import { RelationCountMetadataToAttributeTransformer } from "./relation-count/RelationCountMetadataToAttributeTransformer";
-import { Broadcaster } from "../subscriber/Broadcaster";
 import { QueryBuilder } from "./QueryBuilder";
 import { LockNotSupportedOnGivenDriverError } from "../error/LockNotSupportedOnGivenDriverError";
 import { MysqlDriver } from "../driver/mysql/MysqlDriver";
@@ -64,6 +63,8 @@ import { PostgresDriver } from "../driver/postgres/PostgresDriver";
 import { OracleDriver } from "../driver/oracle/OracleDriver";
 import { AbstractSqliteDriver } from "../driver/sqlite-abstract/AbstractSqliteDriver";
 import { OffsetWithoutLimitNotSupportedError } from "../error/OffsetWithoutLimitNotSupportedError";
+import { BroadcasterResult } from "../subscriber/BroadcasterResult";
+import { abbreviate } from "../util/StringUtils";
 /**
  * Allows to build complex sql queries in a fashion way and execute those queries.
  */
@@ -87,7 +88,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
         sql += this.createOrderByExpression();
         sql += this.createLimitOffsetExpression();
         sql += this.createLockExpression();
-        sql = this.createLimitOffsetOracleSpecificExpression(sql);
         sql = sql.trim();
         if (this.expressionMap.subQuery)
             sql = "(" + sql + ")";
@@ -168,9 +168,9 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.innerJoin = function (entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.innerJoin = function (entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.join("INNER", entityOrProperty, aliasName, condition, parameters);
+        this.join("INNER", entityOrProperty, alias, condition, parameters);
         return this;
     };
     /**
@@ -178,9 +178,9 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.leftJoin = function (entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.leftJoin = function (entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.join("LEFT", entityOrProperty, aliasName, condition, parameters);
+        this.join("LEFT", entityOrProperty, alias, condition, parameters);
         return this;
     };
     /**
@@ -188,10 +188,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.innerJoinAndSelect = function (entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.innerJoinAndSelect = function (entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.addSelect(aliasName);
-        this.innerJoin(entityOrProperty, aliasName, condition, parameters);
+        this.addSelect(alias);
+        this.innerJoin(entityOrProperty, alias, condition, parameters);
         return this;
     };
     /**
@@ -199,10 +199,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.leftJoinAndSelect = function (entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.leftJoinAndSelect = function (entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.addSelect(aliasName);
-        this.leftJoin(entityOrProperty, aliasName, condition, parameters);
+        this.addSelect(alias);
+        this.leftJoin(entityOrProperty, alias, condition, parameters);
         return this;
     };
     /**
@@ -212,10 +212,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.innerJoinAndMapMany = function (mapToProperty, entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.innerJoinAndMapMany = function (mapToProperty, entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.addSelect(aliasName);
-        this.join("INNER", entityOrProperty, aliasName, condition, parameters, mapToProperty, true);
+        this.addSelect(alias);
+        this.join("INNER", entityOrProperty, alias, condition, parameters, mapToProperty, true);
         return this;
     };
     /**
@@ -225,10 +225,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.innerJoinAndMapOne = function (mapToProperty, entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.innerJoinAndMapOne = function (mapToProperty, entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.addSelect(aliasName);
-        this.join("INNER", entityOrProperty, aliasName, condition, parameters, mapToProperty, false);
+        this.addSelect(alias);
+        this.join("INNER", entityOrProperty, alias, condition, parameters, mapToProperty, false);
         return this;
     };
     /**
@@ -238,10 +238,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.leftJoinAndMapMany = function (mapToProperty, entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.leftJoinAndMapMany = function (mapToProperty, entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.addSelect(aliasName);
-        this.join("LEFT", entityOrProperty, aliasName, condition, parameters, mapToProperty, true);
+        this.addSelect(alias);
+        this.join("LEFT", entityOrProperty, alias, condition, parameters, mapToProperty, true);
         return this;
     };
     /**
@@ -251,10 +251,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * You also need to specify an alias of the joined data.
      * Optionally, you can add condition and parameters used in condition.
      */
-    SelectQueryBuilder.prototype.leftJoinAndMapOne = function (mapToProperty, entityOrProperty, aliasName, condition, parameters) {
+    SelectQueryBuilder.prototype.leftJoinAndMapOne = function (mapToProperty, entityOrProperty, alias, condition, parameters) {
         if (condition === void 0) { condition = ""; }
-        this.addSelect(aliasName);
-        this.join("LEFT", entityOrProperty, aliasName, condition, parameters, mapToProperty, false);
+        this.addSelect(alias);
+        this.join("LEFT", entityOrProperty, alias, condition, parameters, mapToProperty, false);
         return this;
     };
     /**
@@ -307,11 +307,14 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
     /**
      * Loads all relation ids for all relations of the selected entity.
      * All relation ids will be mapped to relation property themself.
+     * If array of strings is given then loads only relation ids of the given properties.
      */
-    SelectQueryBuilder.prototype.loadAllRelationIds = function () {
+    SelectQueryBuilder.prototype.loadAllRelationIds = function (options) {
         var _this = this;
         this.expressionMap.mainAlias.metadata.relations.forEach(function (relation) {
-            _this.loadRelationIdAndMap(_this.expressionMap.mainAlias.name + "." + relation.propertyPath, _this.expressionMap.mainAlias.name + "." + relation.propertyPath, { disableMixedMap: true });
+            if (options !== undefined && options.relations !== undefined && options.relations.indexOf(relation.propertyPath) === -1)
+                return;
+            _this.loadRelationIdAndMap(_this.expressionMap.mainAlias.name + "." + relation.propertyPath, _this.expressionMap.mainAlias.name + "." + relation.propertyPath, options);
         });
         return this;
     };
@@ -359,10 +362,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * for example [{ firstId: 1, secondId: 2 }, { firstId: 2, secondId: 3 }, ...]
      */
     SelectQueryBuilder.prototype.whereInIds = function (ids) {
-        ids = ids instanceof Array ? ids : [ids];
-        var _a = this.createWhereIdsExpression(ids), whereExpression = _a[0], parameters = _a[1];
-        this.where(whereExpression, parameters);
-        return this;
+        return this.where(this.createWhereIdsExpression(ids));
     };
     /**
      * Adds new AND WHERE with conditions for the given ids.
@@ -373,9 +373,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * for example [{ firstId: 1, secondId: 2 }, { firstId: 2, secondId: 3 }, ...]
      */
     SelectQueryBuilder.prototype.andWhereInIds = function (ids) {
-        var _a = this.createWhereIdsExpression(ids), whereExpression = _a[0], parameters = _a[1];
-        this.andWhere(whereExpression, parameters);
-        return this;
+        return this.andWhere("(" + this.createWhereIdsExpression(ids) + ")");
     };
     /**
      * Adds new OR WHERE with conditions for the given ids.
@@ -386,9 +384,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * for example [{ firstId: 1, secondId: 2 }, { firstId: 2, secondId: 3 }, ...]
      */
     SelectQueryBuilder.prototype.orWhereInIds = function (ids) {
-        var _a = this.createWhereIdsExpression(ids), whereExpression = _a[0], parameters = _a[1];
-        this.orWhere(whereExpression, parameters);
-        return this;
+        return this.orWhere("(" + this.createWhereIdsExpression(ids) + ")");
     };
     /**
      * Sets HAVING condition in the query builder.
@@ -558,7 +554,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      */
     SelectQueryBuilder.prototype.getRawMany = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var queryRunner;
+            var queryRunner, transactionStartedByUs, results, error_1, rollbackError_1;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -566,19 +562,47 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                             throw new OptimisticLockCanNotBeUsedError();
                         this.expressionMap.queryEntity = false;
                         queryRunner = this.obtainQueryRunner();
+                        transactionStartedByUs = false;
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, , 3, 6]);
-                        return [4 /*yield*/, this.loadRawResults(queryRunner)];
-                    case 2: return [2 /*return*/, _a.sent()];
-                    case 3:
-                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 5];
-                        return [4 /*yield*/, queryRunner.release()];
-                    case 4:
+                        _a.trys.push([1, 7, 12, 15]);
+                        if (!(this.expressionMap.useTransaction === true && queryRunner.isTransactionActive === false)) return [3 /*break*/, 3];
+                        return [4 /*yield*/, queryRunner.startTransaction()];
+                    case 2:
                         _a.sent();
-                        _a.label = 5;
-                    case 5: return [7 /*endfinally*/];
-                    case 6: return [2 /*return*/];
+                        transactionStartedByUs = true;
+                        _a.label = 3;
+                    case 3: return [4 /*yield*/, this.loadRawResults(queryRunner)];
+                    case 4:
+                        results = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 6];
+                        return [4 /*yield*/, queryRunner.commitTransaction()];
+                    case 5:
+                        _a.sent();
+                        _a.label = 6;
+                    case 6: return [2 /*return*/, results];
+                    case 7:
+                        error_1 = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 11];
+                        _a.label = 8;
+                    case 8:
+                        _a.trys.push([8, 10, , 11]);
+                        return [4 /*yield*/, queryRunner.rollbackTransaction()];
+                    case 9:
+                        _a.sent();
+                        return [3 /*break*/, 11];
+                    case 10:
+                        rollbackError_1 = _a.sent();
+                        return [3 /*break*/, 11];
+                    case 11: throw error_1;
+                    case 12:
+                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 14];
+                        return [4 /*yield*/, queryRunner.release()];
+                    case 13:
+                        _a.sent();
+                        _a.label = 14;
+                    case 14: return [7 /*endfinally*/];
+                    case 15: return [2 /*return*/];
                 }
             });
         });
@@ -588,25 +612,54 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      */
     SelectQueryBuilder.prototype.getRawAndEntities = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var queryRunner;
+            var queryRunner, transactionStartedByUs, results, error_2, rollbackError_2;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         queryRunner = this.obtainQueryRunner();
+                        transactionStartedByUs = false;
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, , 3, 6]);
+                        _a.trys.push([1, 7, 12, 15]);
+                        if (!(this.expressionMap.useTransaction === true && queryRunner.isTransactionActive === false)) return [3 /*break*/, 3];
+                        return [4 /*yield*/, queryRunner.startTransaction()];
+                    case 2:
+                        _a.sent();
+                        transactionStartedByUs = true;
+                        _a.label = 3;
+                    case 3:
                         this.expressionMap.queryEntity = true;
                         return [4 /*yield*/, this.executeEntitiesAndRawResults(queryRunner)];
-                    case 2: return [2 /*return*/, _a.sent()];
-                    case 3:
-                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 5];
-                        return [4 /*yield*/, queryRunner.release()];
                     case 4:
+                        results = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 6];
+                        return [4 /*yield*/, queryRunner.commitTransaction()];
+                    case 5:
                         _a.sent();
-                        _a.label = 5;
-                    case 5: return [7 /*endfinally*/];
-                    case 6: return [2 /*return*/];
+                        _a.label = 6;
+                    case 6: return [2 /*return*/, results];
+                    case 7:
+                        error_2 = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 11];
+                        _a.label = 8;
+                    case 8:
+                        _a.trys.push([8, 10, , 11]);
+                        return [4 /*yield*/, queryRunner.rollbackTransaction()];
+                    case 9:
+                        _a.sent();
+                        return [3 /*break*/, 11];
+                    case 10:
+                        rollbackError_2 = _a.sent();
+                        return [3 /*break*/, 11];
+                    case 11: throw error_2;
+                    case 12:
+                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 14];
+                        return [4 /*yield*/, queryRunner.release()];
+                    case 13:
+                        _a.sent();
+                        _a.label = 14;
+                    case 14: return [7 /*endfinally*/];
+                    case 15: return [2 /*return*/];
                 }
             });
         });
@@ -626,12 +679,12 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                         if (result && this.expressionMap.lockMode === "optimistic" && this.expressionMap.lockVersion) {
                             metadata = this.expressionMap.mainAlias.metadata;
                             if (this.expressionMap.lockVersion instanceof Date) {
-                                actualVersion = result[metadata.updateDateColumn.propertyName];
+                                actualVersion = metadata.updateDateColumn.getEntityValue(result);
                                 if (actualVersion.getTime() !== this.expressionMap.lockVersion.getTime())
                                     throw new OptimisticLockVersionMismatchError(metadata.name, this.expressionMap.lockVersion, actualVersion);
                             }
                             else {
-                                actualVersion = result[metadata.versionColumn.propertyName];
+                                actualVersion = metadata.versionColumn.getEntityValue(result);
                                 if (actualVersion !== this.expressionMap.lockVersion)
                                     throw new OptimisticLockVersionMismatchError(metadata.name, this.expressionMap.lockVersion, actualVersion);
                             }
@@ -666,26 +719,56 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      */
     SelectQueryBuilder.prototype.getCount = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var queryRunner;
+            var queryRunner, transactionStartedByUs, results, error_3, rollbackError_3;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         if (this.expressionMap.lockMode === "optimistic")
                             throw new OptimisticLockCanNotBeUsedError();
                         queryRunner = this.obtainQueryRunner();
+                        transactionStartedByUs = false;
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, , 3, 6]);
-                        return [4 /*yield*/, this.executeCountQuery(queryRunner)];
-                    case 2: return [2 /*return*/, _a.sent()];
-                    case 3:
-                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 5];
-                        return [4 /*yield*/, queryRunner.release()];
-                    case 4:
+                        _a.trys.push([1, 7, 12, 15]);
+                        if (!(this.expressionMap.useTransaction === true && queryRunner.isTransactionActive === false)) return [3 /*break*/, 3];
+                        return [4 /*yield*/, queryRunner.startTransaction()];
+                    case 2:
                         _a.sent();
-                        _a.label = 5;
-                    case 5: return [7 /*endfinally*/];
-                    case 6: return [2 /*return*/];
+                        transactionStartedByUs = true;
+                        _a.label = 3;
+                    case 3:
+                        this.expressionMap.queryEntity = false;
+                        return [4 /*yield*/, this.executeCountQuery(queryRunner)];
+                    case 4:
+                        results = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 6];
+                        return [4 /*yield*/, queryRunner.commitTransaction()];
+                    case 5:
+                        _a.sent();
+                        _a.label = 6;
+                    case 6: return [2 /*return*/, results];
+                    case 7:
+                        error_3 = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 11];
+                        _a.label = 8;
+                    case 8:
+                        _a.trys.push([8, 10, , 11]);
+                        return [4 /*yield*/, queryRunner.rollbackTransaction()];
+                    case 9:
+                        _a.sent();
+                        return [3 /*break*/, 11];
+                    case 10:
+                        rollbackError_3 = _a.sent();
+                        return [3 /*break*/, 11];
+                    case 11: throw error_3;
+                    case 12:
+                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 14];
+                        return [4 /*yield*/, queryRunner.release()];
+                    case 13:
+                        _a.sent();
+                        _a.label = 14;
+                    case 14: return [7 /*endfinally*/];
+                    case 15: return [2 /*return*/];
                 }
             });
         });
@@ -696,31 +779,61 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      */
     SelectQueryBuilder.prototype.getManyAndCount = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var queryRunner, entitiesAndRaw, count;
+            var queryRunner, transactionStartedByUs, entitiesAndRaw, count, results, error_4, rollbackError_4;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         if (this.expressionMap.lockMode === "optimistic")
                             throw new OptimisticLockCanNotBeUsedError();
                         queryRunner = this.obtainQueryRunner();
+                        transactionStartedByUs = false;
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, , 4, 7]);
-                        return [4 /*yield*/, this.executeEntitiesAndRawResults(queryRunner)];
+                        _a.trys.push([1, 8, 13, 16]);
+                        if (!(this.expressionMap.useTransaction === true && queryRunner.isTransactionActive === false)) return [3 /*break*/, 3];
+                        return [4 /*yield*/, queryRunner.startTransaction()];
                     case 2:
-                        entitiesAndRaw = _a.sent();
-                        return [4 /*yield*/, this.executeCountQuery(queryRunner)];
-                    case 3:
-                        count = _a.sent();
-                        return [2 /*return*/, [entitiesAndRaw.entities, count]];
-                    case 4:
-                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 6];
-                        return [4 /*yield*/, queryRunner.release()];
-                    case 5:
                         _a.sent();
-                        _a.label = 6;
-                    case 6: return [7 /*endfinally*/];
-                    case 7: return [2 /*return*/];
+                        transactionStartedByUs = true;
+                        _a.label = 3;
+                    case 3:
+                        this.expressionMap.queryEntity = true;
+                        return [4 /*yield*/, this.executeEntitiesAndRawResults(queryRunner)];
+                    case 4:
+                        entitiesAndRaw = _a.sent();
+                        this.expressionMap.queryEntity = false;
+                        return [4 /*yield*/, this.executeCountQuery(queryRunner)];
+                    case 5:
+                        count = _a.sent();
+                        results = [entitiesAndRaw.entities, count];
+                        if (!transactionStartedByUs) return [3 /*break*/, 7];
+                        return [4 /*yield*/, queryRunner.commitTransaction()];
+                    case 6:
+                        _a.sent();
+                        _a.label = 7;
+                    case 7: return [2 /*return*/, results];
+                    case 8:
+                        error_4 = _a.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 12];
+                        _a.label = 9;
+                    case 9:
+                        _a.trys.push([9, 11, , 12]);
+                        return [4 /*yield*/, queryRunner.rollbackTransaction()];
+                    case 10:
+                        _a.sent();
+                        return [3 /*break*/, 12];
+                    case 11:
+                        rollbackError_4 = _a.sent();
+                        return [3 /*break*/, 12];
+                    case 12: throw error_4;
+                    case 13:
+                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 15];
+                        return [4 /*yield*/, queryRunner.release()];
+                    case 14:
+                        _a.sent();
+                        _a.label = 15;
+                    case 15: return [7 /*endfinally*/];
+                    case 16: return [2 /*return*/];
                 }
             });
         });
@@ -731,30 +844,58 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
     SelectQueryBuilder.prototype.stream = function () {
         return __awaiter(this, void 0, void 0, function () {
             var _this = this;
-            var _a, sql, parameters, queryRunner, releaseFn;
+            var _a, sql, parameters, queryRunner, transactionStartedByUs, releaseFn, results, error_5, rollbackError_5;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
                         this.expressionMap.queryEntity = false;
                         _a = this.getQueryAndParameters(), sql = _a[0], parameters = _a[1];
                         queryRunner = this.obtainQueryRunner();
+                        transactionStartedByUs = false;
                         _b.label = 1;
                     case 1:
-                        _b.trys.push([1, , 2, 5]);
+                        _b.trys.push([1, 6, 11, 14]);
+                        if (!(this.expressionMap.useTransaction === true && queryRunner.isTransactionActive === false)) return [3 /*break*/, 3];
+                        return [4 /*yield*/, queryRunner.startTransaction()];
+                    case 2:
+                        _b.sent();
+                        transactionStartedByUs = true;
+                        _b.label = 3;
+                    case 3:
                         releaseFn = function () {
-                            if (queryRunner !== _this.queryRunner)
+                            if (queryRunner !== _this.queryRunner) // means we created our own query runner
                                 return queryRunner.release();
                             return;
                         };
-                        return [2 /*return*/, queryRunner.stream(sql, parameters, releaseFn, releaseFn)];
-                    case 2:
-                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 4];
-                        return [4 /*yield*/, queryRunner.release()];
-                    case 3:
+                        results = queryRunner.stream(sql, parameters, releaseFn, releaseFn);
+                        if (!transactionStartedByUs) return [3 /*break*/, 5];
+                        return [4 /*yield*/, queryRunner.commitTransaction()];
+                    case 4:
                         _b.sent();
-                        _b.label = 4;
-                    case 4: return [7 /*endfinally*/];
-                    case 5: return [2 /*return*/];
+                        _b.label = 5;
+                    case 5: return [2 /*return*/, results];
+                    case 6:
+                        error_5 = _b.sent();
+                        if (!transactionStartedByUs) return [3 /*break*/, 10];
+                        _b.label = 7;
+                    case 7:
+                        _b.trys.push([7, 9, , 10]);
+                        return [4 /*yield*/, queryRunner.rollbackTransaction()];
+                    case 8:
+                        _b.sent();
+                        return [3 /*break*/, 10];
+                    case 9:
+                        rollbackError_5 = _b.sent();
+                        return [3 /*break*/, 10];
+                    case 10: throw error_5;
+                    case 11:
+                        if (!(queryRunner !== this.queryRunner)) return [3 /*break*/, 13];
+                        return [4 /*yield*/, queryRunner.release()];
+                    case 12:
+                        _b.sent();
+                        _b.label = 13;
+                    case 13: return [7 /*endfinally*/];
+                    case 14: return [2 /*return*/];
                 }
             });
         });
@@ -777,6 +918,13 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
         if (maybeMilliseconds) {
             this.expressionMap.cacheDuration = maybeMilliseconds;
         }
+        return this;
+    };
+    /**
+     * Sets extra options that can be used to configure how query builder works.
+     */
+    SelectQueryBuilder.prototype.setOption = function (option) {
+        this.expressionMap.options.push(option);
         return this;
     };
     // -------------------------------------------------------------------------
@@ -857,36 +1005,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                 }
             }
         });
-        if (!this.expressionMap.ignoreParentTablesJoins && this.expressionMap.mainAlias.hasMetadata) {
-            var metadata = this.expressionMap.mainAlias.metadata;
-            if (metadata.parentEntityMetadata && metadata.parentEntityMetadata.inheritanceType === "class-table" && metadata.parentIdColumns) {
-                var alias_1 = "parentIdColumn_" + metadata.parentEntityMetadata.tableName;
-                metadata.parentEntityMetadata.columns.forEach(function (column) {
-                    // TODO implement partial select
-                    allSelects.push({ selection: _this.escape(alias_1) + "." + _this.escape(column.databaseName), aliasName: alias_1 + "_" + column.databaseName });
-                });
-            }
-        }
-        // add selects from relation id joins
-        // this.relationIdAttributes.forEach(relationIdAttr => {
-        // });
-        /*if (this.enableRelationIdValues) {
-         const parentMetadata = this.aliasMap.getEntityMetadataByAlias(this.aliasMap.mainAlias);
-         if (!parentMetadata)
-         throw new Error("Cannot get entity metadata for the given alias " + this.aliasMap.mainAlias.name);
-
-         const metadata = this.connection.entityMetadatas.findByTarget(this.aliasMap.mainAlias.target);
-         metadata.manyToManyRelations.forEach(relation => {
-
-         const junctionMetadata = relation.junctionEntityMetadata;
-         junctionMetadata.columns.forEach(column => {
-         const select = ea(this.aliasMap.mainAlias.name + "_" + junctionMetadata.table.name + "_ids") + "." +
-         ec(column.name) + " AS " +
-         ea(this.aliasMap.mainAlias.name + "_" + relation.name + "_ids_" + column.name);
-         allSelects.push(select);
-         });
-         });
-         }*/
         // add all other selects
         this.expressionMap.selects
             .filter(function (select) { return excludedSelects.indexOf(select) === -1; })
@@ -914,8 +1032,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
             return _this.getTableName(alias.tablePath) + " " + _this.escape(alias.name);
         });
         var selection = allSelects.map(function (select) { return select.selection + (select.aliasName ? " AS " + _this.escape(select.aliasName) : ""); }).join(", ");
-        if ((this.expressionMap.limit || this.expressionMap.offset) && this.connection.driver instanceof OracleDriver)
-            return "SELECT ROWNUM " + this.escape("RN") + "," + selection + " FROM " + froms.join(", ") + lock;
         return "SELECT " + selection + " FROM " + froms.join(", ") + lock;
     };
     /**
@@ -960,7 +1076,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                 }).join(" AND ");
                 return " " + joinAttr.direction + " JOIN " + _this.getTableName(destinationTableName) + " " + _this.escape(destinationTableAlias) + " ON " + _this.replacePropertyNames(condition + appendedCondition);
             }
-            else {
+            else { // means many-to-many
                 var junctionTableName = relation.junctionEntityMetadata.tablePath;
                 var junctionAlias_1 = joinAttr.junctionAlias;
                 var junctionCondition = "", destinationCondition = "";
@@ -988,17 +1104,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                     " " + joinAttr.direction + " JOIN " + _this.getTableName(destinationTableName) + " " + _this.escape(destinationTableAlias) + " ON " + _this.replacePropertyNames(destinationCondition + appendedCondition);
             }
         });
-        if (!this.expressionMap.ignoreParentTablesJoins && this.expressionMap.mainAlias.hasMetadata) {
-            var metadata = this.expressionMap.mainAlias.metadata;
-            if (metadata.parentEntityMetadata && metadata.parentEntityMetadata.inheritanceType === "class-table" && metadata.parentIdColumns) {
-                var alias_2 = "parentIdColumn_" + metadata.parentEntityMetadata.tableName;
-                var condition = metadata.parentIdColumns.map(function (parentIdColumn) {
-                    return _this.expressionMap.mainAlias.name + "." + parentIdColumn.propertyPath + " = " + _this.escape(alias_2) + "." + _this.escape(parentIdColumn.referencedColumn.propertyPath);
-                }).join(" AND ");
-                var join = " JOIN " + this.getTableName(metadata.parentEntityMetadata.tablePath) + " " + this.escape(alias_2) + " ON " + this.replacePropertyNames(condition);
-                joins.push(join);
-            }
-        }
         return joins.join(" ");
     };
     /**
@@ -1029,26 +1134,9 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
         return "";
     };
     /**
-     * Creates "LIMIT" and "OFFSET" parts of SQL query for Oracle database.
-     */
-    SelectQueryBuilder.prototype.createLimitOffsetOracleSpecificExpression = function (sql) {
-        if ((this.expressionMap.offset || this.expressionMap.limit) && this.connection.driver instanceof OracleDriver) {
-            sql = "SELECT * FROM (" + sql + ") WHERE ";
-            if (this.expressionMap.offset) {
-                sql += this.escape("RN") + " >= " + this.expressionMap.offset;
-            }
-            if (this.expressionMap.limit) {
-                sql += (this.expressionMap.offset ? " AND " : "") + this.escape("RN") + " <= " + ((this.expressionMap.offset || 0) + this.expressionMap.limit);
-            }
-        }
-        return sql;
-    };
-    /**
      * Creates "LIMIT" and "OFFSET" parts of SQL query.
      */
     SelectQueryBuilder.prototype.createLimitOffsetExpression = function () {
-        if (this.connection.driver instanceof OracleDriver)
-            return "";
         // in the case if nothing is joined in the query builder we don't need to make two requests to get paginated results
         // we can use regular limit / offset, that's why we add offset and limit construction here based on skip and take values
         var offset = this.expressionMap.offset, limit = this.expressionMap.limit;
@@ -1080,6 +1168,14 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
             if (offset)
                 return " LIMIT -1 OFFSET " + offset;
         }
+        else if (this.connection.driver instanceof OracleDriver) {
+            if (limit && offset)
+                return " OFFSET " + offset + " ROWS FETCH NEXT " + limit + " ROWS ONLY";
+            if (limit)
+                return " FETCH NEXT " + limit + " ROWS ONLY";
+            if (offset)
+                return " OFFSET " + offset + " ROWS";
+        }
         else {
             if (limit && offset)
                 return " LIMIT " + limit + " OFFSET " + offset;
@@ -1094,25 +1190,29 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      * Creates "LOCK" part of SQL query.
      */
     SelectQueryBuilder.prototype.createLockExpression = function () {
+        var driver = this.connection.driver;
         switch (this.expressionMap.lockMode) {
             case "pessimistic_read":
-                if (this.connection.driver instanceof MysqlDriver) {
+                if (driver instanceof MysqlDriver) {
                     return " LOCK IN SHARE MODE";
                 }
-                else if (this.connection.driver instanceof PostgresDriver) {
+                else if (driver instanceof PostgresDriver) {
                     return " FOR SHARE";
                 }
-                else if (this.connection.driver instanceof SqlServerDriver) {
+                else if (driver instanceof OracleDriver) {
+                    return " FOR UPDATE";
+                }
+                else if (driver instanceof SqlServerDriver) {
                     return "";
                 }
                 else {
                     throw new LockNotSupportedOnGivenDriverError();
                 }
             case "pessimistic_write":
-                if (this.connection.driver instanceof MysqlDriver || this.connection.driver instanceof PostgresDriver) {
+                if (driver instanceof MysqlDriver || driver instanceof PostgresDriver || driver instanceof OracleDriver) {
                     return " FOR UPDATE";
                 }
-                else if (this.connection.driver instanceof SqlServerDriver) {
+                else if (driver instanceof SqlServerDriver) {
                     return "";
                 }
                 else {
@@ -1151,18 +1251,27 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
             columns.push.apply(columns, metadata.columns.filter(function (column) { return column.isSelect === true; }));
         }
         columns.push.apply(columns, metadata.columns.filter(function (column) {
-            return _this.expressionMap.selects.some(function (select) { return select.selection === aliasName + "." + column.propertyName; });
+            return _this.expressionMap.selects.some(function (select) { return select.selection === aliasName + "." + column.propertyPath; });
         }));
         // if user used partial selection and did not select some primary columns which are required to be selected
         // we select those primary columns and mark them as "virtual". Later virtual column values will be removed from final entity
         // to make entity contain exactly what user selected
+        if (columns.length === 0) // however not in the case when nothing (even partial) was selected from this target (for example joins without selection)
+            return [];
         var nonSelectedPrimaryColumns = this.expressionMap.queryEntity ? metadata.primaryColumns.filter(function (primaryColumn) { return columns.indexOf(primaryColumn) === -1; }) : [];
         var allColumns = columns.concat(nonSelectedPrimaryColumns);
         return allColumns.map(function (column) {
-            var selection = _this.expressionMap.selects.find(function (select) { return select.selection === aliasName + "." + column.propertyName; });
+            var selection = _this.expressionMap.selects.find(function (select) { return select.selection === aliasName + "." + column.propertyPath; });
+            var selectionPath = _this.escape(aliasName) + "." + _this.escape(column.databaseName);
+            if (_this.connection.driver.spatialTypes.indexOf(column.type) !== -1) {
+                if (_this.connection.driver instanceof MysqlDriver)
+                    selectionPath = "AsText(" + selectionPath + ")";
+                if (_this.connection.driver instanceof SqlServerDriver)
+                    selectionPath = selectionPath + ".ToString()";
+            }
             return {
-                selection: _this.escape(aliasName) + "." + _this.escape(column.databaseName),
-                aliasName: selection && selection.aliasName ? selection.aliasName : aliasName + "_" + column.databaseName,
+                selection: selectionPath,
+                aliasName: selection && selection.aliasName ? selection.aliasName : _this.buildColumnAlias(aliasName, column.databaseName),
                 // todo: need to keep in mind that custom selection.aliasName breaks hydrator. fix it later!
                 virtual: selection ? selection.virtual === true : (hasMainAlias ? false : true),
             };
@@ -1173,7 +1282,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
         if (mainSelect)
             return [mainSelect];
         return this.expressionMap.selects.filter(function (select) {
-            return metadata.columns.some(function (column) { return select.selection === aliasName + "." + column.propertyName; });
+            return metadata.columns.some(function (column) { return select.selection === aliasName + "." + column.propertyPath; });
         });
     };
     SelectQueryBuilder.prototype.executeCountQuery = function (queryRunner) {
@@ -1183,7 +1292,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        this.expressionMap.queryEntity = false;
                         mainAlias = this.expressionMap.mainAlias.name;
                         metadata = this.expressionMap.mainAlias.metadata;
                         distinctAlias = this.escape(mainAlias);
@@ -1209,7 +1317,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                             }).join(", ") + ")) as \"cnt\"";
                         }
                         return [4 /*yield*/, this.clone()
-                                .mergeExpressionMap({ ignoreParentTablesJoins: true })
                                 .orderBy()
                                 .groupBy()
                                 .offset(undefined)
@@ -1217,6 +1324,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                                 .skip(undefined)
                                 .take(undefined)
                                 .select(countSql)
+                                .setOption("disable-global-order")
                                 .loadRawResults(queryRunner)];
                     case 1:
                         results = _a.sent();
@@ -1233,7 +1341,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
     SelectQueryBuilder.prototype.executeEntitiesAndRawResults = function (queryRunner) {
         return __awaiter(this, void 0, void 0, function () {
             var _this = this;
-            var metadata, broadcaster, relationIdLoader, relationCountLoader, relationIdMetadataTransformer, relationCountMetadataTransformer, rawResults, entities, _a, selects, orderBys_1, metadata_1, mainAliasName_1, querySelects, condition, parameters_1, ids, areAllNumbers, rawRelationIdResults, rawRelationCountResults, transformer;
+            var metadata, relationIdLoader, relationCountLoader, relationIdMetadataTransformer, relationCountMetadataTransformer, rawResults, entities, _a, selects, orderBys_1, metadata_1, mainAliasName_1, querySelects, condition, parameters_1, ids, areAllNumbers, rawRelationIdResults, rawRelationCountResults, transformer, broadcastResult;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -1246,7 +1354,6 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                             if (!metadata.versionColumn && !metadata.updateDateColumn)
                                 throw new NoVersionOrUpdateDateColumnError(metadata.name);
                         }
-                        broadcaster = new Broadcaster(this.connection);
                         relationIdLoader = new RelationIdLoader(this.connection, queryRunner, this.expressionMap.relationIdAttributes);
                         relationCountLoader = new RelationCountLoader(this.connection, queryRunner, this.expressionMap.relationCountAttributes);
                         relationIdMetadataTransformer = new RelationIdMetadataToAttributeTransformer(this.expressionMap);
@@ -1260,10 +1367,10 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                         mainAliasName_1 = this.expressionMap.mainAlias.name;
                         querySelects = metadata_1.primaryColumns.map(function (primaryColumn) {
                             var distinctAlias = _this.escape("distinctAlias");
-                            var columnAlias = _this.escape(mainAliasName_1 + "_" + primaryColumn.databaseName);
-                            if (!orderBys_1[columnAlias])
+                            var columnAlias = _this.escape(_this.buildColumnAlias(mainAliasName_1, primaryColumn.databaseName));
+                            if (!orderBys_1[columnAlias]) // make sure we aren't overriding user-defined order in inverse direction
                                 orderBys_1[columnAlias] = "ASC";
-                            return distinctAlias + "." + columnAlias + " as \"ids_" + (mainAliasName_1 + "_" + primaryColumn.databaseName) + "\"";
+                            return distinctAlias + "." + columnAlias + " as \"ids_" + _this.buildColumnAlias(mainAliasName_1, primaryColumn.databaseName) + "\"";
                         });
                         return [4 /*yield*/, new SelectQueryBuilder(this.connection, queryRunner)
                                 .select("DISTINCT " + querySelects.join(", "))
@@ -1274,6 +1381,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                                 .orderBy(orderBys_1)
                                 .cache(this.expressionMap.cache ? this.expressionMap.cache : this.expressionMap.cacheId, this.expressionMap.cacheDuration)
                                 .setParameters(this.getParameters())
+                                .setNativeParameters(this.expressionMap.nativeParameters)
                                 .getRawMany()];
                     case 1:
                         rawResults = _b.sent();
@@ -1283,21 +1391,21 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                         if (metadata_1.hasMultiplePrimaryKeys) {
                             condition = rawResults.map(function (result, index) {
                                 return metadata_1.primaryColumns.map(function (primaryColumn) {
-                                    parameters_1["ids_" + index + "_" + primaryColumn.propertyName] = result["ids_" + mainAliasName_1 + "_" + primaryColumn.databaseName];
-                                    return mainAliasName_1 + "." + primaryColumn.propertyName + "=:ids_" + index + "_" + primaryColumn.databaseName;
+                                    parameters_1["ids_" + index + "_" + primaryColumn.databaseName] = result["ids_" + mainAliasName_1 + "_" + primaryColumn.databaseName];
+                                    return mainAliasName_1 + "." + primaryColumn.propertyPath + "=:ids_" + index + "_" + primaryColumn.databaseName;
                                 }).join(" AND ");
                             }).join(" OR ");
                         }
                         else {
-                            ids = rawResults.map(function (result) { return result["ids_" + mainAliasName_1 + "_" + metadata_1.primaryColumns[0].databaseName]; });
+                            ids = rawResults.map(function (result) { return result["ids_" + _this.buildColumnAlias(mainAliasName_1, metadata_1.primaryColumns[0].databaseName)]; });
                             areAllNumbers = ids.every(function (id) { return typeof id === "number"; });
                             if (areAllNumbers) {
                                 // fixes #190. if all numbers then its safe to perform query without parameter
-                                condition = mainAliasName_1 + "." + metadata_1.primaryColumns[0].propertyName + " IN (" + ids.join(", ") + ")";
+                                condition = mainAliasName_1 + "." + metadata_1.primaryColumns[0].propertyPath + " IN (" + ids.join(", ") + ")";
                             }
                             else {
                                 parameters_1["ids"] = ids;
-                                condition = mainAliasName_1 + "." + metadata_1.primaryColumns[0].propertyName + " IN (:ids)";
+                                condition = mainAliasName_1 + "." + metadata_1.primaryColumns[0].propertyPath + " IN (:...ids)";
                             }
                         }
                         return [4 /*yield*/, this.clone()
@@ -1320,10 +1428,13 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                         return [4 /*yield*/, relationCountLoader.load(rawResults)];
                     case 8:
                         rawRelationCountResults = _b.sent();
-                        transformer = new RawSqlResultsToEntityTransformer(this.expressionMap, this.connection.driver, rawRelationIdResults, rawRelationCountResults);
+                        transformer = new RawSqlResultsToEntityTransformer(this.expressionMap, this.connection.driver, rawRelationIdResults, rawRelationCountResults, this.queryRunner);
                         entities = transformer.transform(rawResults, this.expressionMap.mainAlias);
-                        if (!this.expressionMap.mainAlias.hasMetadata) return [3 /*break*/, 10];
-                        return [4 /*yield*/, broadcaster.broadcastLoadEventsForAll(this.expressionMap.mainAlias.target, entities)];
+                        if (!(this.expressionMap.callListeners === true && this.expressionMap.mainAlias.hasMetadata)) return [3 /*break*/, 10];
+                        broadcastResult = new BroadcasterResult();
+                        queryRunner.broadcaster.broadcastLoadEventsForAll(broadcastResult, this.expressionMap.mainAlias.metadata, entities);
+                        if (!(broadcastResult.promises.length > 0)) return [3 /*break*/, 10];
+                        return [4 /*yield*/, Promise.all(broadcastResult.promises)];
                     case 9:
                         _b.sent();
                         _b.label = 10;
@@ -1345,7 +1456,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                 var _a = orderCriteria.split("."), aliasName = _a[0], propertyPath = _a[1];
                 var alias = _this.expressionMap.findAliasByName(aliasName);
                 var column = alias.metadata.findColumnWithPropertyName(propertyPath);
-                return _this.escape(parentAlias) + "." + _this.escape(aliasName + "_" + column.databaseName);
+                return _this.escape(parentAlias) + "." + _this.escape(_this.buildColumnAlias(aliasName, column.databaseName));
             }
             else {
                 if (_this.expressionMap.selects.find(function (select) { return select.selection === orderCriteria || select.aliasName === orderCriteria; }))
@@ -1360,7 +1471,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                 var _a = orderCriteria.split("."), aliasName = _a[0], propertyPath = _a[1];
                 var alias = _this.expressionMap.findAliasByName(aliasName);
                 var column = alias.metadata.findColumnWithPropertyName(propertyPath);
-                orderByObject[_this.escape(parentAlias) + "." + _this.escape(aliasName + "_" + column.databaseName)] = orderBys[orderCriteria];
+                orderByObject[_this.escape(parentAlias) + "." + _this.escape(_this.buildColumnAlias(aliasName, column.databaseName))] = orderBys[orderCriteria];
             }
             else {
                 if (_this.expressionMap.selects.find(function (select) { return select.selection === orderCriteria || select.aliasName === orderCriteria; })) {
@@ -1378,17 +1489,18 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
      */
     SelectQueryBuilder.prototype.loadRawResults = function (queryRunner) {
         return __awaiter(this, void 0, void 0, function () {
-            var _a, sql, parameters, cacheOptions, savedQueryResultCacheOptions, results;
+            var _a, sql, parameters, queryId, cacheOptions, savedQueryResultCacheOptions, results;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
                         _a = this.getQueryAndParameters(), sql = _a[0], parameters = _a[1];
+                        queryId = sql + " -- PARAMETERS: " + JSON.stringify(parameters);
                         cacheOptions = typeof this.connection.options.cache === "object" ? this.connection.options.cache : {};
                         savedQueryResultCacheOptions = undefined;
                         if (!(this.connection.queryResultCache && (this.expressionMap.cache || cacheOptions.alwaysEnabled))) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.connection.queryResultCache.getFromCache({
                                 identifier: this.expressionMap.cacheId,
-                                query: this.getSql(),
+                                query: queryId,
                                 duration: this.expressionMap.cacheDuration || cacheOptions.duration || 1000
                             }, queryRunner)];
                     case 1:
@@ -1402,7 +1514,7 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                         if (!(this.connection.queryResultCache && (this.expressionMap.cache || cacheOptions.alwaysEnabled))) return [3 /*break*/, 5];
                         return [4 /*yield*/, this.connection.queryResultCache.storeInCache({
                                 identifier: this.expressionMap.cacheId,
-                                query: this.getSql(),
+                                query: queryId,
                                 time: new Date().getTime(),
                                 duration: this.expressionMap.cacheDuration || cacheOptions.duration || 1000,
                                 result: JSON.stringify(results)
@@ -1414,6 +1526,16 @@ var SelectQueryBuilder = /** @class */ (function (_super) {
                 }
             });
         });
+    };
+    /**
+     * Builds column alias from given alias name and column name,
+     * If alias length is more than 29, abbreviates column name.
+     */
+    SelectQueryBuilder.prototype.buildColumnAlias = function (aliasName, columnName) {
+        var columnAliasName = aliasName + "_" + columnName;
+        if (columnAliasName.length > 29 && this.connection.driver instanceof OracleDriver)
+            return aliasName + "_" + abbreviate(columnName, 2);
+        return columnAliasName;
     };
     /**
      * Merges into expression map given expression map properties.

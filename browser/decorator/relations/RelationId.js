@@ -1,17 +1,18 @@
-import { getMetadataArgsStorage } from "../../index";
+import { getMetadataArgsStorage } from "../../";
 /**
  * Special decorator used to extract relation id into separate entity property.
+ *
+ * @experimental
  */
 export function RelationId(relation, alias, queryBuilderFactory) {
     return function (object, propertyName) {
-        var args = {
+        getMetadataArgsStorage().relationIds.push({
             target: object.constructor,
             propertyName: propertyName,
             relation: relation,
             alias: alias,
             queryBuilderFactory: queryBuilderFactory
-        };
-        getMetadataArgsStorage().relationIds.push(args);
+        });
     };
 }
 

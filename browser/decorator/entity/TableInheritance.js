@@ -1,14 +1,14 @@
-import { getMetadataArgsStorage } from "../../index";
+import { getMetadataArgsStorage } from "../../";
 /**
- * Sets what kind of table-inheritance table will use.
+ * Sets for entity to use table inheritance pattern.
  */
-export function TableInheritance(type) {
+export function TableInheritance(options) {
     return function (target) {
-        var args = {
+        getMetadataArgsStorage().inheritances.push({
             target: target,
-            type: type
-        };
-        getMetadataArgsStorage().inheritances.push(args);
+            pattern: options && options.pattern ? options.pattern : "STI",
+            column: options && options.column ? typeof options.column === "string" ? { name: options.column } : options.column : undefined
+        });
     };
 }
 

@@ -14,9 +14,10 @@ var __extends = (this && this.__extends) || (function () {
 var LimitOnUpdateNotSupportedError = /** @class */ (function (_super) {
     __extends(LimitOnUpdateNotSupportedError, _super);
     function LimitOnUpdateNotSupportedError() {
-        var _this = _super.call(this, "Your database does not support LIMIT on UPDATE statements.") || this;
-        Object.setPrototypeOf(_this, LimitOnUpdateNotSupportedError.prototype);
+        var _this = _super.call(this) || this;
         _this.name = "LimitOnUpdateNotSupportedError";
+        Object.setPrototypeOf(_this, LimitOnUpdateNotSupportedError.prototype);
+        _this.message = "Your database does not support LIMIT on UPDATE statements.";
         return _this;
     }
     return LimitOnUpdateNotSupportedError;

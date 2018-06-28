@@ -33,6 +33,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+import { OracleDriver } from "../driver/oracle/OracleDriver";
 /**
  * Allows to work with entity relations and perform specific operations with those relations.
  *
@@ -54,6 +55,7 @@ var RelationUpdater = /** @class */ (function () {
      */
     RelationUpdater.prototype.update = function (value) {
         return __awaiter(this, void 0, void 0, function () {
+            var _this = this;
             var relation, updateSet, updateSet_1, ofs, parameters_1, conditions_1, condition, of_1, updateSet, junctionMetadata_1, ofs, values, firstColumnValues, secondColumnValues_1, bulkInserted_1;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -75,7 +77,7 @@ var RelationUpdater = /** @class */ (function () {
                                 .execute()];
                     case 1:
                         _a.sent();
-                        return [3 /*break*/, 8];
+                        return [3 /*break*/, 10];
                     case 2:
                         if (!((relation.isOneToOneNotOwner || relation.isOneToMany) && value === null)) return [3 /*break*/, 4];
                         updateSet_1 = {};
@@ -104,7 +106,7 @@ var RelationUpdater = /** @class */ (function () {
                                 .execute()];
                     case 3:
                         _a.sent();
-                        return [3 /*break*/, 8];
+                        return [3 /*break*/, 10];
                     case 4:
                         if (!(relation.isOneToOneNotOwner || relation.isOneToMany)) return [3 /*break*/, 6];
                         if (this.expressionMap.of instanceof Array)
@@ -125,7 +127,7 @@ var RelationUpdater = /** @class */ (function () {
                                 .execute()];
                     case 5:
                         _a.sent();
-                        return [3 /*break*/, 8];
+                        return [3 /*break*/, 10];
                     case 6:
                         junctionMetadata_1 = relation.junctionEntityMetadata;
                         ofs = this.expressionMap.of instanceof Array ? this.expressionMap.of : [this.expressionMap.of];
@@ -147,16 +149,28 @@ var RelationUpdater = /** @class */ (function () {
                         });
                         if (!bulkInserted_1.length)
                             return [2 /*return*/];
-                        return [4 /*yield*/, this.queryBuilder
-                                .createQueryBuilder()
-                                .insert()
-                                .into(junctionMetadata_1.tableName)
-                                .values(bulkInserted_1)
-                                .execute()];
+                        if (!(this.queryBuilder.connection.driver instanceof OracleDriver)) return [3 /*break*/, 8];
+                        return [4 /*yield*/, Promise.all(bulkInserted_1.map(function (value) {
+                                return _this.queryBuilder
+                                    .createQueryBuilder()
+                                    .insert()
+                                    .into(junctionMetadata_1.tableName)
+                                    .values(value)
+                                    .execute();
+                            }))];
                     case 7:
                         _a.sent();
-                        _a.label = 8;
-                    case 8: return [2 /*return*/];
+                        return [3 /*break*/, 10];
+                    case 8: return [4 /*yield*/, this.queryBuilder
+                            .createQueryBuilder()
+                            .insert()
+                            .into(junctionMetadata_1.tableName)
+                            .values(bulkInserted_1)
+                            .execute()];
+                    case 9:
+                        _a.sent();
+                        _a.label = 10;
+                    case 10: return [2 /*return*/];
                 }
             });
         });
