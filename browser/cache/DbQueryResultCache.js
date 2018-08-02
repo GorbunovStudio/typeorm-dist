@@ -33,10 +33,10 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-import { Table } from "../schema-builder/schema/Table";
-import { TableColumn } from "../schema-builder/schema/TableColumn";
+import { Table } from "../schema-builder/table/Table";
 import { SqlServerDriver } from "../driver/sqlserver/SqlServerDriver";
 import { MssqlParameter } from "../driver/sqlserver/MssqlParameter";
+import { OracleDriver } from "../driver/oracle/OracleDriver";
 /**
  * Caches query result into current database, into separate table called "query-result-cache".
  */
@@ -46,6 +46,8 @@ var DbQueryResultCache = /** @class */ (function () {
     // -------------------------------------------------------------------------
     function DbQueryResultCache(connection) {
         this.connection = connection;
+        var options = this.connection.driver.options;
+        this.queryResultCacheTable = this.connection.driver.buildTableName("query-result-cache", options.schema, options.database);
     }
     // -------------------------------------------------------------------------
     // Public Methods
@@ -81,49 +83,52 @@ var DbQueryResultCache = /** @class */ (function () {
                     case 0:
                         queryRunner = this.getQueryRunner(queryRunner);
                         driver = this.connection.driver;
-                        return [4 /*yield*/, queryRunner.hasTable("query-result-cache")];
+                        return [4 /*yield*/, queryRunner.hasTable(this.queryResultCacheTable)];
                     case 1:
                         tableExist = _a.sent();
                         if (tableExist)
                             return [2 /*return*/];
-                        return [4 /*yield*/, queryRunner.createTable(new Table("query-result-cache", [
-                                new TableColumn({
-                                    name: "id",
-                                    isNullable: true,
-                                    isPrimary: true,
-                                    type: driver.normalizeType({ type: driver.mappedDataTypes.cacheId }),
-                                    generationStrategy: "increment",
-                                    isGenerated: true
-                                }),
-                                new TableColumn({
-                                    name: "identifier",
-                                    type: driver.normalizeType({ type: driver.mappedDataTypes.cacheIdentifier }),
-                                    isNullable: true
-                                }),
-                                new TableColumn({
-                                    name: "time",
-                                    type: driver.normalizeType({ type: driver.mappedDataTypes.cacheTime }),
-                                    isPrimary: false,
-                                    isNullable: false
-                                }),
-                                new TableColumn({
-                                    name: "duration",
-                                    type: driver.normalizeType({ type: driver.mappedDataTypes.cacheDuration }),
-                                    isPrimary: false,
-                                    isNullable: false
-                                }),
-                                new TableColumn({
-                                    name: "query",
-                                    type: driver.normalizeType({ type: driver.mappedDataTypes.cacheQuery }),
-                                    isPrimary: false,
-                                    isNullable: false
-                                }),
-                                new TableColumn({
-                                    name: "result",
-                                    type: driver.normalizeType({ type: driver.mappedDataTypes.cacheResult }),
-                                    isNullable: false
-                                }),
-                            ]))];
+                        return [4 /*yield*/, queryRunner.createTable(new Table({
+                                name: this.queryResultCacheTable,
+                                columns: [
+                                    {
+                                        name: "id",
+                                        isPrimary: true,
+                                        isNullable: false,
+                                        type: driver.normalizeType({ type: driver.mappedDataTypes.cacheId }),
+                                        generationStrategy: "increment",
+                                        isGenerated: true
+                                    },
+                                    {
+                                        name: "identifier",
+                                        type: driver.normalizeType({ type: driver.mappedDataTypes.cacheIdentifier }),
+                                        isNullable: true
+                                    },
+                                    {
+                                        name: "time",
+                                        type: driver.normalizeType({ type: driver.mappedDataTypes.cacheTime }),
+                                        isPrimary: false,
+                                        isNullable: false
+                                    },
+                                    {
+                                        name: "duration",
+                                        type: driver.normalizeType({ type: driver.mappedDataTypes.cacheDuration }),
+                                        isPrimary: false,
+                                        isNullable: false
+                                    },
+                                    {
+                                        name: "query",
+                                        type: driver.normalizeType({ type: driver.mappedDataTypes.cacheQuery }),
+                                        isPrimary: false,
+                                        isNullable: false
+                                    },
+                                    {
+                                        name: "result",
+                                        type: driver.normalizeType({ type: driver.mappedDataTypes.cacheResult }),
+                                        isNullable: false
+                                    },
+                                ]
+                            }))];
                     case 2:
                         _a.sent();
                         return [2 /*return*/];
@@ -141,7 +146,7 @@ var DbQueryResultCache = /** @class */ (function () {
         var qb = this.connection
             .createQueryBuilder(queryRunner)
             .select()
-            .from("query-result-cache", "cache");
+            .from(this.queryResultCacheTable, "cache");
         if (options.identifier) {
             return qb
                 .where(qb.escape("cache") + "." + qb.escape("identifier") + " = :identifier")
@@ -149,6 +154,11 @@ var DbQueryResultCache = /** @class */ (function () {
                 .getRawOne();
         }
         else if (options.query) {
+            if (this.connection.driver instanceof OracleDriver) {
+                return qb
+                    .where("dbms_lob.compare(" + qb.escape("cache") + "." + qb.escape("query") + ", :query) = 0", { query: options.query })
+                    .getRawOne();
+            }
             return qb
                 .where(qb.escape("cache") + "." + qb.escape("query") + " = :query")
                 .setParameters({ query: this.connection.driver instanceof SqlServerDriver ? new MssqlParameter(options.query, "nvarchar") : options.query })
@@ -167,13 +177,13 @@ var DbQueryResultCache = /** @class */ (function () {
      */
     DbQueryResultCache.prototype.storeInCache = function (options, savedCache, queryRunner) {
         return __awaiter(this, void 0, void 0, function () {
-            var insertedValues;
+            var insertedValues, qb, qb;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         queryRunner = this.getQueryRunner(queryRunner);
                         insertedValues = options;
-                        if (this.connection.driver instanceof SqlServerDriver) {
+                        if (this.connection.driver instanceof SqlServerDriver) { // todo: bad abstraction, re-implement this part, probably better if we create an entity metadata for cache table
                             insertedValues = {
                                 identifier: new MssqlParameter(options.identifier, "nvarchar"),
                                 time: new MssqlParameter(options.time, "bigint"),
@@ -183,18 +193,38 @@ var DbQueryResultCache = /** @class */ (function () {
                             };
                         }
                         if (!(savedCache && savedCache.identifier)) return [3 /*break*/, 2];
-                        return [4 /*yield*/, queryRunner.update("query-result-cache", insertedValues, { identifier: insertedValues.identifier })];
+                        qb = queryRunner.manager
+                            .createQueryBuilder()
+                            .update(this.queryResultCacheTable)
+                            .set(insertedValues);
+                        qb.where(qb.escape("identifier") + " = :condition", { condition: insertedValues.identifier });
+                        return [4 /*yield*/, qb.execute()];
                     case 1:
                         _a.sent();
                         return [3 /*break*/, 6];
                     case 2:
                         if (!(savedCache && savedCache.query)) return [3 /*break*/, 4];
-                        return [4 /*yield*/, queryRunner.update("query-result-cache", insertedValues, { query: insertedValues.query })];
+                        qb = queryRunner.manager
+                            .createQueryBuilder()
+                            .update(this.queryResultCacheTable)
+                            .set(insertedValues);
+                        if (this.connection.driver instanceof OracleDriver) {
+                            qb.where("dbms_lob.compare(\"query\", :condition) = 0", { condition: insertedValues.query });
+                        }
+                        else {
+                            qb.where(qb.escape("query") + " = :condition", { condition: insertedValues.query });
+                        }
+                        return [4 /*yield*/, qb.execute()];
                     case 3:
                         _a.sent();
                         return [3 /*break*/, 6];
                     case 4: // otherwise insert
-                    return [4 /*yield*/, queryRunner.insert("query-result-cache", insertedValues)];
+                    return [4 /*yield*/, queryRunner.manager
+                            .createQueryBuilder()
+                            .insert()
+                            .into(this.queryResultCacheTable)
+                            .values(insertedValues)
+                            .execute()];
                     case 5:
                         _a.sent();
                         _a.label = 6;
@@ -209,7 +239,7 @@ var DbQueryResultCache = /** @class */ (function () {
     DbQueryResultCache.prototype.clear = function (queryRunner) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, this.getQueryRunner(queryRunner).truncate("query-result-cache")];
+                return [2 /*return*/, this.getQueryRunner(queryRunner).clearTable(this.queryResultCacheTable)];
             });
         });
     };
@@ -222,7 +252,11 @@ var DbQueryResultCache = /** @class */ (function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0: return [4 /*yield*/, Promise.all(identifiers.map(function (identifier) {
-                            return _this.getQueryRunner(queryRunner).delete("query-result-cache", { identifier: identifier });
+                            var qb = _this.getQueryRunner(queryRunner).manager.createQueryBuilder();
+                            return qb.delete()
+                                .from(_this.queryResultCacheTable)
+                                .where(qb.escape("identifier") + " = :identifier", { identifier: identifier })
+                                .execute();
                         }))];
                     case 1:
                         _a.sent();

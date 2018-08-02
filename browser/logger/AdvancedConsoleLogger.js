@@ -19,7 +19,7 @@ var AdvancedConsoleLogger = /** @class */ (function () {
     AdvancedConsoleLogger.prototype.logQuery = function (query, parameters, queryRunner) {
         if (this.options === "all" || this.options === true || (this.options instanceof Array && this.options.indexOf("query") !== -1)) {
             var sql = query + (parameters && parameters.length ? " -- PARAMETERS: " + this.stringifyParams(parameters) : "");
-            PlatformTools.logInfo("executing query:", PlatformTools.highlightSql(sql));
+            PlatformTools.logInfo("query:", PlatformTools.highlightSql(sql));
         }
     };
     /**
@@ -85,7 +85,7 @@ var AdvancedConsoleLogger = /** @class */ (function () {
         try {
             return JSON.stringify(parameters);
         }
-        catch (error) {
+        catch (error) { // most probably circular objects in parameters
             return parameters;
         }
     };

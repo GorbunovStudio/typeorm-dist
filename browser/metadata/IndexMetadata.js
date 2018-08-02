@@ -11,6 +11,20 @@ var IndexMetadata = /** @class */ (function () {
          */
         this.isUnique = false;
         /**
+         * The SPATIAL modifier indexes the entire column and does not allow indexed columns to contain NULL values.
+         * Works only in MySQL.
+         */
+        this.isSpatial = false;
+        /**
+         * The FULLTEXT modifier indexes the entire column and does not allow prefixing.
+         * Works only in MySQL.
+         */
+        this.isFulltext = false;
+        /**
+         * Indicates if this index must synchronize with database index.
+         */
+        this.synchronize = true;
+        /**
          * Indexed columns.
          */
         this.columns = [];
@@ -25,7 +39,12 @@ var IndexMetadata = /** @class */ (function () {
             this.columns = options.columns;
         if (options.args) {
             this.target = options.args.target;
-            this.isUnique = options.args.unique;
+            if (options.args.synchronize !== null && options.args.synchronize !== undefined)
+                this.synchronize = options.args.synchronize;
+            this.isUnique = !!options.args.unique;
+            this.isSpatial = !!options.args.spatial;
+            this.isFulltext = !!options.args.fulltext;
+            this.where = options.args.where;
             this.isSparse = options.args.sparse;
             this.givenName = options.args.name;
             this.givenColumnNames = options.args.columns;
@@ -40,8 +59,11 @@ var IndexMetadata = /** @class */ (function () {
      */
     IndexMetadata.prototype.build = function (namingStrategy) {
         var _this = this;
+        if (this.synchronize === false) {
+            this.name = this.givenName;
+            return this;
+        }
         var map = {};
-        this.tableName = this.entityMetadata.tableName;
         // if columns already an array of string then simply return it
         if (this.givenColumnNames) {
             var columnPropertyPaths = [];
@@ -53,7 +75,7 @@ var IndexMetadata = /** @class */ (function () {
                 });
                 columnPropertyPaths.forEach(function (propertyPath) { return map[propertyPath] = 1; });
             }
-            else {
+            else { // todo: indices in embeds are not implemented in this syntax. deprecate this syntax?
                 // if columns is a function that returns array of field names then execute it and get columns names from it
                 var columnsFnResult_1 = this.givenColumnNames(this.entityMetadata.propertiesMap);
                 if (columnsFnResult_1 instanceof Array) {
@@ -84,7 +106,7 @@ var IndexMetadata = /** @class */ (function () {
                 updatedMap[column.databaseName] = map[key];
             return updatedMap;
         }, {});
-        this.name = namingStrategy.indexName(this.givenName ? this.givenName : undefined, this.entityMetadata.tableName, this.columns.map(function (column) { return column.databaseName; }));
+        this.name = this.givenName ? this.givenName : namingStrategy.indexName(this.entityMetadata.tablePath, this.columns.map(function (column) { return column.databaseName; }), this.where);
         return this;
     };
     return IndexMetadata;

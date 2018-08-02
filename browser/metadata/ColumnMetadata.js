@@ -1,4 +1,7 @@
 import { OrmUtils } from "../util/OrmUtils";
+import { MongoDriver } from "../driver/mongodb/MongoDriver";
+import { PromiseUtils } from "../util/PromiseUtils";
+import { FindOperator } from "../find-options/FindOperator";
 /**
  * This metadata contains all information about entity's column.
  */
@@ -20,10 +23,6 @@ var ColumnMetadata = /** @class */ (function () {
          */
         this.isGenerated = false;
         /**
-         * Indicates if column value in the database should be unique or not.
-         */
-        this.isUnique = false;
-        /**
          * Indicates if column can contain nulls or not.
          */
         this.isNullable = false;
@@ -41,13 +40,22 @@ var ColumnMetadata = /** @class */ (function () {
          */
         this.comment = "";
         /**
+         * Puts ZEROFILL attribute on to numeric column. Works only for MySQL.
+         * If you specify ZEROFILL for a numeric column, MySQL automatically adds the UNSIGNED attribute to the column
+         */
+        this.zerofill = false;
+        /**
+         * Puts UNSIGNED attribute on to numeric column. Works only for MySQL.
+         */
+        this.unsigned = false;
+        /**
+         * Indicates if this column is an array.
+         */
+        this.isArray = false;
+        /**
          * Indicates if column is virtual. Virtual columns are not mapped to the entity.
          */
         this.isVirtual = false;
-        /**
-         * Indicates if column is a parent id. Parent id columns are not mapped to the entity.
-         */
-        this.isParentId = false;
         /**
          * Indicates if column is discriminator. Discriminator columns are not mapped to the entity.
          */
@@ -72,6 +80,21 @@ var ColumnMetadata = /** @class */ (function () {
          * Indicates if this column contains an object id.
          */
         this.isObjectId = false;
+        /**
+         * Indicates if this column is nested set's left column.
+         * Used only in tree entities with nested-set type.
+         */
+        this.isNestedSetLeft = false;
+        /**
+         * Indicates if this column is nested set's right column.
+         * Used only in tree entities with nested-set type.
+         */
+        this.isNestedSetRight = false;
+        /**
+         * Indicates if this column is materialized path's path column.
+         * Used only in tree entities with materialized path type.
+         */
+        this.isMaterializedPath = false;
         this.entityMetadata = options.entityMetadata;
         this.embeddedMetadata = options.embeddedMetadata;
         this.referencedColumn = options.referencedColumn;
@@ -85,15 +108,15 @@ var ColumnMetadata = /** @class */ (function () {
             this.type = options.args.options.type;
         if (options.args.options.length)
             this.length = options.args.options.length ? options.args.options.length.toString() : "";
+        if (options.args.options.width)
+            this.width = options.args.options.width;
         if (options.args.options.charset)
             this.charset = options.args.options.charset;
         if (options.args.options.collation)
             this.collation = options.args.options.collation;
         if (options.args.options.primary)
             this.isPrimary = options.args.options.primary;
-        if (options.args.options.unique)
-            this.isUnique = options.args.options.unique;
-        if (options.args.options.default === null)
+        if (options.args.options.default === null) // to make sure default: null is the same as nullable: true
             this.isNullable = true;
         if (options.args.options.nullable !== undefined)
             this.isNullable = options.args.options.nullable;
@@ -105,9 +128,17 @@ var ColumnMetadata = /** @class */ (function () {
             this.comment = options.args.options.comment;
         if (options.args.options.default !== undefined)
             this.default = options.args.options.default;
-        if (options.args.options.scale)
+        if (options.args.options.onUpdate)
+            this.onUpdate = options.args.options.onUpdate;
+        if (options.args.options.scale !== null && options.args.options.scale !== undefined)
             this.scale = options.args.options.scale;
-        if (options.args.options.precision)
+        if (options.args.options.zerofill) {
+            this.zerofill = options.args.options.zerofill;
+            this.unsigned = true; // if you specify ZEROFILL for a numeric column, MySQL automatically adds the UNSIGNED attribute to the column
+        }
+        if (options.args.options.unsigned)
+            this.unsigned = options.args.options.unsigned;
+        if (options.args.options.precision !== undefined)
             this.precision = options.args.options.precision;
         if (options.args.options.enum) {
             if (options.args.options.enum instanceof Object) {
@@ -119,14 +150,16 @@ var ColumnMetadata = /** @class */ (function () {
                 this.enum = options.args.options.enum;
             }
         }
-        if (options.args.options.isArray)
-            this.isArray = options.args.options.isArray;
+        if (options.args.options.asExpression) {
+            this.asExpression = options.args.options.asExpression;
+            this.generatedType = options.args.options.generatedType ? options.args.options.generatedType : "VIRTUAL";
+        }
+        if (options.args.options.hstoreType)
+            this.hstoreType = options.args.options.hstoreType;
         if (options.args.options.array)
             this.isArray = options.args.options.array;
         if (options.args.mode) {
             this.isVirtual = options.args.mode === "virtual";
-            this.isParentId = options.args.mode === "parentId";
-            this.isDiscriminator = options.args.mode === "discriminator";
             this.isTreeLevel = options.args.mode === "treeLevel";
             this.isCreateDate = options.args.mode === "createDate";
             this.isUpdateDate = options.args.mode === "updateDate";
@@ -138,21 +171,31 @@ var ColumnMetadata = /** @class */ (function () {
         if (this.isTreeLevel)
             this.type = options.connection.driver.mappedDataTypes.treeLevel;
         if (this.isCreateDate) {
-            this.type = options.connection.driver.mappedDataTypes.createDate;
+            if (!this.type)
+                this.type = options.connection.driver.mappedDataTypes.createDate;
             if (!this.default)
                 this.default = function () { return options.connection.driver.mappedDataTypes.createDateDefault; };
-            if (!this.precision && options.connection.driver.mappedDataTypes.createDatePrecision)
+            if (this.precision === undefined && options.connection.driver.mappedDataTypes.createDatePrecision)
                 this.precision = options.connection.driver.mappedDataTypes.createDatePrecision;
         }
         if (this.isUpdateDate) {
-            this.type = options.connection.driver.mappedDataTypes.updateDate;
+            if (!this.type)
+                this.type = options.connection.driver.mappedDataTypes.updateDate;
             if (!this.default)
                 this.default = function () { return options.connection.driver.mappedDataTypes.updateDateDefault; };
-            if (!this.precision && options.connection.driver.mappedDataTypes.updateDatePrecision)
+            if (this.precision === undefined && options.connection.driver.mappedDataTypes.updateDatePrecision)
                 this.precision = options.connection.driver.mappedDataTypes.updateDatePrecision;
         }
         if (this.isVersion)
             this.type = options.connection.driver.mappedDataTypes.version;
+        if (options.closureType)
+            this.closureType = options.closureType;
+        if (options.nestedSetLeft)
+            this.isNestedSetLeft = options.nestedSetLeft;
+        if (options.nestedSetRight)
+            this.isNestedSetRight = options.nestedSetRight;
+        if (options.materializedPath)
+            this.isMaterializedPath = options.materializedPath;
     }
     // ---------------------------------------------------------------------
     // Public Methods
@@ -160,8 +203,9 @@ var ColumnMetadata = /** @class */ (function () {
     /**
      * Creates entity id map from the given entity ids array.
      */
-    ColumnMetadata.prototype.createValueMap = function (value) {
+    ColumnMetadata.prototype.createValueMap = function (value, useDatabaseName) {
         var _this = this;
+        if (useDatabaseName === void 0) { useDatabaseName = false; }
         // extract column value from embeds of entity if column is in embedded
         if (this.embeddedMetadata) {
             // example: post[data][information][counters].id where "data", "information" and "counters" are embeddeds
@@ -184,16 +228,16 @@ var ColumnMetadata = /** @class */ (function () {
                 // this is bugfix for #720 when increment number is bigint we need to make sure its a string
                 if (_this.generationStrategy === "increment" && _this.type === "bigint")
                     value = String(value);
-                map[_this.propertyName] = value;
+                map[useDatabaseName ? _this.databaseName : _this.propertyName] = value;
                 return map;
             };
             return extractEmbeddedColumnValue_1(propertyNames, {});
         }
-        else {
+        else { // no embeds - no problems. Simply return column property name and its value of the entity
             // this is bugfix for #720 when increment number is bigint we need to make sure its a string
             if (this.generationStrategy === "increment" && this.type === "bigint")
                 value = String(value);
-            return _a = {}, _a[this.propertyName] = value, _a;
+            return _a = {}, _a[useDatabaseName ? this.databaseName : this.propertyName] = value, _a;
         }
         var _a;
     };
@@ -204,8 +248,9 @@ var ColumnMetadata = /** @class */ (function () {
      * Examples what this method can return depend if this column is in embeds.
      * { id: 1 } or { title: "hello" }, { counters: { code: 1 } }, { data: { information: { counters: { code: 1 } } } }
      */
-    ColumnMetadata.prototype.getEntityValueMap = function (entity) {
+    ColumnMetadata.prototype.getEntityValueMap = function (entity, options) {
         var _this = this;
+        var returnNulls = false; // options && options.skipNulls === false ? false : true; // todo: remove if current will not bring problems, uncomment if it will.
         // extract column value from embeds of entity if column is in embedded
         if (this.embeddedMetadata) {
             // example: post[data][information][counters].id where "data", "information" and "counters" are embeddeds
@@ -220,25 +265,40 @@ var ColumnMetadata = /** @class */ (function () {
             // this recursive function helps doing that
             var extractEmbeddedColumnValue_2 = function (propertyNames, value, map) {
                 var propertyName = propertyNames.shift();
+                if (value === undefined)
+                    return map;
                 if (propertyName) {
-                    map[propertyName] = {};
-                    extractEmbeddedColumnValue_2(propertyNames, value ? value[propertyName] : undefined, map[propertyName]);
+                    var submap = {};
+                    extractEmbeddedColumnValue_2(propertyNames, value[propertyName], submap);
+                    if (Object.keys(submap).length > 0) {
+                        map[propertyName] = submap;
+                    }
                     return map;
                 }
-                map[_this.propertyName] = value ? value[_this.propertyName] : undefined;
+                if (value[_this.propertyName] !== undefined && (returnNulls === false || value[_this.propertyName] !== null))
+                    map[_this.propertyName] = value[_this.propertyName];
                 return map;
             };
-            return extractEmbeddedColumnValue_2(propertyNames, entity, {});
+            var map = {};
+            extractEmbeddedColumnValue_2(propertyNames, entity, map);
+            return Object.keys(map).length > 0 ? map : undefined;
         }
-        else {
+        else { // no embeds - no problems. Simply return column property name and its value of the entity
             if (this.relationMetadata && entity[this.propertyName] && entity[this.propertyName] instanceof Object) {
                 var map = this.relationMetadata.joinColumns.reduce(function (map, joinColumn) {
-                    return OrmUtils.mergeDeep(map, joinColumn.referencedColumn.getEntityValueMap(entity[_this.propertyName]));
+                    var value = joinColumn.referencedColumn.getEntityValueMap(entity[_this.propertyName]);
+                    if (value === undefined)
+                        return map;
+                    return OrmUtils.mergeDeep(map, value);
                 }, {});
-                return _a = {}, _a[this.propertyName] = map, _a;
+                if (Object.keys(map).length > 0)
+                    return _a = {}, _a[this.propertyName] = map, _a;
+                return undefined;
             }
             else {
-                return _b = {}, _b[this.propertyName] = entity[this.propertyName], _b;
+                if (entity[this.propertyName] !== undefined && (returnNulls === false || entity[this.propertyName] !== null))
+                    return _b = {}, _b[this.propertyName] = entity[this.propertyName], _b;
+                return undefined;
             }
         }
         var _a, _b;
@@ -247,9 +307,11 @@ var ColumnMetadata = /** @class */ (function () {
      * Extracts column value from the given entity.
      * If column is in embedded (or recursive embedded) it extracts its value from there.
      */
-    ColumnMetadata.prototype.getEntityValue = function (entity) {
+    ColumnMetadata.prototype.getEntityValue = function (entity, transform) {
         // if (entity === undefined || entity === null) return undefined; // uncomment if needed
+        if (transform === void 0) { transform = false; }
         // extract column value from embeddeds of entity if column is in embedded
+        var value = undefined;
         if (this.embeddedMetadata) {
             // example: post[data][information][counters].id where "data", "information" and "counters" are embeddeds
             // we need to get value of "id" column from the post real entity object
@@ -264,23 +326,49 @@ var ColumnMetadata = /** @class */ (function () {
             // once we get nested embed object we get its column, e.g. post[data][information][counters][this.propertyName]
             var embeddedObject = extractEmbeddedColumnValue_3(propertyNames, entity);
             if (embeddedObject) {
-                if (this.relationMetadata && this.referencedColumn && this.isVirtual) {
+                if (this.relationMetadata && this.referencedColumn) {
                     var relatedEntity = this.relationMetadata.getEntityValue(embeddedObject);
-                    if (relatedEntity && relatedEntity instanceof Object)
-                        return this.referencedColumn.getEntityValue(relatedEntity);
+                    if (relatedEntity && relatedEntity instanceof Object && !(relatedEntity instanceof FindOperator)) {
+                        value = this.referencedColumn.getEntityValue(PromiseUtils.extractValue(relatedEntity));
+                    }
+                    else if (embeddedObject[this.propertyName] && embeddedObject[this.propertyName] instanceof Object && !(embeddedObject[this.propertyName] instanceof FindOperator)) {
+                        value = this.referencedColumn.getEntityValue(PromiseUtils.extractValue(embeddedObject[this.propertyName]));
+                    }
+                    else {
+                        value = PromiseUtils.extractValue(embeddedObject[this.propertyName]);
+                    }
                 }
-                return embeddedObject[this.propertyName];
+                else if (this.referencedColumn) {
+                    value = this.referencedColumn.getEntityValue(PromiseUtils.extractValue(embeddedObject[this.propertyName]));
+                }
+                else {
+                    value = PromiseUtils.extractValue(embeddedObject[this.propertyName]);
+                }
             }
-            return undefined;
         }
-        else {
-            if (this.relationMetadata && this.referencedColumn && this.isVirtual) {
+        else { // no embeds - no problems. Simply return column name by property name of the entity
+            if (this.relationMetadata && this.referencedColumn) {
                 var relatedEntity = this.relationMetadata.getEntityValue(entity);
-                if (relatedEntity && relatedEntity instanceof Object)
-                    return this.referencedColumn.getEntityValue(relatedEntity);
+                if (relatedEntity && relatedEntity instanceof Object && !(relatedEntity instanceof FindOperator) && !(relatedEntity instanceof Function)) {
+                    value = this.referencedColumn.getEntityValue(PromiseUtils.extractValue(relatedEntity));
+                }
+                else if (entity[this.propertyName] && entity[this.propertyName] instanceof Object && !(entity[this.propertyName] instanceof FindOperator) && !(entity[this.propertyName] instanceof Function)) {
+                    value = this.referencedColumn.getEntityValue(PromiseUtils.extractValue(entity[this.propertyName]));
+                }
+                else {
+                    value = entity[this.propertyName];
+                }
             }
-            return entity[this.propertyName];
+            else if (this.referencedColumn) {
+                value = this.referencedColumn.getEntityValue(PromiseUtils.extractValue(entity[this.propertyName]));
+            }
+            else {
+                value = entity[this.propertyName];
+            }
         }
+        if (transform && this.transformer)
+            value = this.transformer.to(value);
+        return value;
     };
     /**
      * Sets given entity's column value.
@@ -314,13 +402,12 @@ var ColumnMetadata = /** @class */ (function () {
     // ---------------------------------------------------------------------
     ColumnMetadata.prototype.build = function (connection) {
         this.propertyPath = this.buildPropertyPath();
+        this.propertyAliasName = this.propertyPath.replace(".", "_");
         this.databaseName = this.buildDatabaseName(connection);
+        this.databasePath = this.buildDatabasePath();
         this.databaseNameWithoutPrefixes = connection.namingStrategy.columnName(this.propertyName, this.givenDatabaseName, []);
         return this;
     };
-    // ---------------------------------------------------------------------
-    // Protected Methods
-    // ---------------------------------------------------------------------
     ColumnMetadata.prototype.buildPropertyPath = function () {
         var path = "";
         if (this.embeddedMetadata && this.embeddedMetadata.parentPropertyNames.length)
@@ -328,12 +415,27 @@ var ColumnMetadata = /** @class */ (function () {
         path += this.propertyName;
         // we add reference column to property path only if this column is virtual
         // because if its not virtual it means user defined a real column for this relation
-        if (this.isVirtual && this.referencedColumn && this.referencedColumn.propertyName !== this.propertyName)
+        // also we don't do it if column is inside a junction table
+        if (!this.entityMetadata.isJunction && this.isVirtual && this.referencedColumn && this.referencedColumn.propertyName !== this.propertyName)
             path += "." + this.referencedColumn.propertyName;
+        return path;
+    };
+    ColumnMetadata.prototype.buildDatabasePath = function () {
+        var path = "";
+        if (this.embeddedMetadata && this.embeddedMetadata.parentPropertyNames.length)
+            path = this.embeddedMetadata.parentPropertyNames.join(".") + ".";
+        path += this.databaseName;
+        // we add reference column to property path only if this column is virtual
+        // because if its not virtual it means user defined a real column for this relation
+        // also we don't do it if column is inside a junction table
+        if (!this.entityMetadata.isJunction && this.isVirtual && this.referencedColumn && this.referencedColumn.databaseName !== this.databaseName)
+            path += "." + this.referencedColumn.databaseName;
         return path;
     };
     ColumnMetadata.prototype.buildDatabaseName = function (connection) {
         var propertyNames = this.embeddedMetadata ? this.embeddedMetadata.parentPrefixes : [];
+        if (connection.driver instanceof MongoDriver) // we don't need to include embedded name for the mongodb column names
+            propertyNames = [];
         return connection.namingStrategy.columnName(this.propertyName, this.givenDatabaseName, propertyNames);
     };
     return ColumnMetadata;

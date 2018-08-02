@@ -1,26 +1,25 @@
-import { getMetadataArgsStorage } from "../../index";
+import { getMetadataArgsStorage } from "../../";
+import { CannotReflectMethodParameterTypeError } from "../../error/CannotReflectMethodParameterTypeError";
 /**
  * Injects transaction's repository into the method wrapped with @Transaction decorator.
  */
 export function TransactionRepository(entityType) {
     return function (object, methodName, index) {
+        // get repository type
         var repositoryType;
         try {
             repositoryType = Reflect.getOwnMetadata("design:paramtypes", object, methodName)[index];
         }
         catch (err) {
-            throw new Error("Cannot get reflected type for a \"" + methodName + "\" method's parameter of " + object.constructor.name + " class. " +
-                "Make sure you have turned on an \"emitDecoratorMetadata\": true, option in tsconfig.json. " +
-                "Also make sure you have imported \"reflect-metadata\" on top of the main entry file in your application.");
+            throw new CannotReflectMethodParameterTypeError(object.constructor, methodName);
         }
-        var args = {
+        getMetadataArgsStorage().transactionRepositories.push({
             target: object.constructor,
             methodName: methodName,
             index: index,
             repositoryType: repositoryType,
             entityType: entityType,
-        };
-        getMetadataArgsStorage().transactionRepositories.push(args);
+        });
     };
 }
 

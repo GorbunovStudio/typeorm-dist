@@ -27,6 +27,7 @@ var ForeignKeyMetadata = /** @class */ (function () {
         this.columns = options.columns;
         this.referencedColumns = options.referencedColumns;
         this.onDelete = options.onDelete;
+        this.onUpdate = options.onUpdate;
         if (options.namingStrategy)
             this.build(options.namingStrategy);
     }
@@ -40,9 +41,8 @@ var ForeignKeyMetadata = /** @class */ (function () {
     ForeignKeyMetadata.prototype.build = function (namingStrategy) {
         this.columnNames = this.columns.map(function (column) { return column.databaseName; });
         this.referencedColumnNames = this.referencedColumns.map(function (column) { return column.databaseName; });
-        this.tableName = this.entityMetadata.tableName;
-        this.referencedTableName = this.referencedEntityMetadata.tableName;
-        this.name = namingStrategy.foreignKeyName(this.tableName, this.columnNames, this.referencedEntityMetadata.tableName, this.referencedColumnNames);
+        this.referencedTablePath = this.referencedEntityMetadata.tablePath;
+        this.name = namingStrategy.foreignKeyName(this.entityMetadata.tablePath, this.columnNames);
     };
     return ForeignKeyMetadata;
 }());

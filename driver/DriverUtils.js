@@ -56,9 +56,13 @@ var DriverUtils = /** @class */ (function () {
         var lastAtSign = base.lastIndexOf("@");
         var usernameAndPassword = base.substr(0, lastAtSign);
         var hostAndPort = base.substr(lastAtSign + 1);
+        var username = usernameAndPassword;
+        var password = "";
         var firstColon = usernameAndPassword.indexOf(":");
-        var username = usernameAndPassword.substr(0, firstColon);
-        var password = usernameAndPassword.substr(firstColon + 1);
+        if (firstColon !== -1) {
+            username = usernameAndPassword.substr(0, firstColon);
+            password = usernameAndPassword.substr(firstColon + 1);
+        }
         var _a = hostAndPort.split(":"), host = _a[0], port = _a[1];
         return {
             host: host,

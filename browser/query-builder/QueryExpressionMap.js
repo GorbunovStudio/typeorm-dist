@@ -39,9 +39,9 @@ var QueryExpressionMap = /** @class */ (function () {
          */
         this.selects = [];
         /**
-         * Optional returning (or output) clause for insert, update or delete queries.
+         * Extra returning columns to be added to the returning statement if driver supports it.
          */
-        this.returning = "";
+        this.extraReturningColumns = [];
         /**
          * Optional on conflict statement used in insertion query in postgres.
          */
@@ -85,10 +85,6 @@ var QueryExpressionMap = /** @class */ (function () {
          */
         this.disableEscaping = true;
         /**
-         * todo: needs more information.
-         */
-        this.ignoreParentTablesJoins = false;
-        /**
          * Indicates if virtual columns should be included in entity result.
          *
          * todo: what to do with it? is it properly used? what about persistence?
@@ -114,10 +110,36 @@ var QueryExpressionMap = /** @class */ (function () {
          */
         this.cache = false;
         /**
+         * Options that define QueryBuilder behaviour.
+         */
+        this.options = [];
+        /**
          * List of columns where data should be inserted.
          * Used in INSERT query.
          */
         this.insertColumns = [];
+        /**
+         * Used if user wants to update or delete a specific entities.
+         */
+        this.whereEntities = [];
+        /**
+         * Indicates if entity must be updated after insertion / updation.
+         * This may produce extra query or use RETURNING / OUTPUT statement (depend on database).
+         */
+        this.updateEntity = true;
+        /**
+         * Indicates if listeners and subscribers must be called before and after query execution.
+         */
+        this.callListeners = true;
+        /**
+         * Indicates if query must be wrapped into transaction.
+         */
+        this.useTransaction = false;
+        /**
+         * Extra parameters.
+         * Used in InsertQueryBuilder to avoid default parameters mechanizm and execute high performance insertions.
+         */
+        this.nativeParameters = {};
     }
     Object.defineProperty(QueryExpressionMap.prototype, "allOrderBys", {
         // -------------------------------------------------------------------------
@@ -129,7 +151,7 @@ var QueryExpressionMap = /** @class */ (function () {
          */
         get: function () {
             var _this = this;
-            if (!Object.keys(this.orderBys).length && this.mainAlias.hasMetadata) {
+            if (!Object.keys(this.orderBys).length && this.mainAlias.hasMetadata && this.options.indexOf("disable-global-order") === -1) {
                 var entityOrderBy_1 = this.mainAlias.metadata.orderBy || {};
                 return Object.keys(entityOrderBy_1).reduce(function (orderBy, key) {
                     orderBy[_this.mainAlias.name + "." + key] = entityOrderBy_1[key];
@@ -149,8 +171,8 @@ var QueryExpressionMap = /** @class */ (function () {
      */
     QueryExpressionMap.prototype.setMainAlias = function (alias) {
         // if main alias is already set then remove it from the array
-        if (this.mainAlias)
-            this.aliases.splice(this.aliases.indexOf(this.mainAlias));
+        // if (this.mainAlias)
+        //     this.aliases.splice(this.aliases.indexOf(this.mainAlias));
         // set new main alias
         this.mainAlias = alias;
         return alias;
@@ -242,7 +264,6 @@ var QueryExpressionMap = /** @class */ (function () {
         map.lockVersion = this.lockVersion;
         map.parameters = Object.assign({}, this.parameters);
         map.disableEscaping = this.disableEscaping;
-        map.ignoreParentTablesJoins = this.ignoreParentTablesJoins;
         map.enableRelationIdValues = this.enableRelationIdValues;
         map.extraAppendedAndWhereCondition = this.extraAppendedAndWhereCondition;
         map.subQuery = this.subQuery;
@@ -252,6 +273,12 @@ var QueryExpressionMap = /** @class */ (function () {
         map.cacheDuration = this.cacheDuration;
         map.relationPropertyPath = this.relationPropertyPath;
         map.of = this.of;
+        map.insertColumns = this.insertColumns;
+        map.whereEntities = this.whereEntities;
+        map.updateEntity = this.updateEntity;
+        map.callListeners = this.callListeners;
+        map.useTransaction = this.useTransaction;
+        map.nativeParameters = this.nativeParameters;
         return map;
     };
     return QueryExpressionMap;
